@@ -1,0 +1,21 @@
+# Docker ignore file for depth estimation service
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+.git
+.gitignore
+README.md
+.env
+.venv
+.pytest_cache
+.coverage
+htmlcov/
+*.log
+.DS_Store
+Thumbs.db
+*.tmp
+models/*.pth
+*.pt

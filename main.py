@@ -4,6 +4,10 @@ Provides monocular depth estimation using official DepthAnything V2 PyTorch impl
 Optimized for NVIDIA L4 GPUs on Google Cloud Run
 """
 
+# Set environment for headless operation before any imports
+import os
+os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
+
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
 import cv2
@@ -14,7 +18,6 @@ from PIL import Image
 import io
 import logging
 import time
-import os
 import base64
 from typing import Optional, Dict, Any
 from pydantic import BaseModel

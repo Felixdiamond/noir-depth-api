@@ -3,6 +3,12 @@
 
 FROM python:3.11-slim
 
+# Set environment variables for headless operation
+ENV DISPLAY=:99
+ENV QT_QPA_PLATFORM=offscreen
+ENV OPENCV_IO_ENABLE_OPENEXR=1
+ENV PYTHONUNBUFFERED=1
+
 # Set working directory
 WORKDIR /app
 
@@ -17,16 +23,40 @@ RUN apt-get update && apt-get install -y \
     libgomp1 \
     libgoogle-perftools4 \
     curl \
+    libgl1-mesa-glx \
+    libgl1-mesa-dri \
+    libglib2.0-0 \
+    libgtk-3-0 \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libv4l-dev \
+    libxvidcore-dev \
+    libx264-dev \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libatlas-base-dev \
+    python3-dev \
+    libfontconfig1-dev \
+    libcairo2-dev \
+    libgdk-pixbuf2.0-dev \
+    libpango1.0-dev \
+    libgtk2.0-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
 COPY requirements.txt .
 
+# Copy application code
+COPY main.py .
+COPY test_opencv.py .
+
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY main.py .
+# Test OpenCV installation
+RUN python test_opencv.py
 
 # Create models directory
 RUN mkdir -p /app/models
