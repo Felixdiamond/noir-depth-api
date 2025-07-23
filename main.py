@@ -147,7 +147,8 @@ def load_depthanything_model():
             use_official = True
         except ImportError:
             logger.warning("⚠️ Official DepthAnything V2 not found, using simplified implementation")
-            use_official = False
+            # raise error and stop run
+            raise ImportError("Official DepthAnything V2 not found")
         
         if use_official:
             # Use official implementation
@@ -167,11 +168,7 @@ def load_depthanything_model():
                     # This would be the ideal way, but requires the model to be available
                     # For now, we'll use the initialized model
                 except Exception as e:
-                    logger.warning(f"Could not load pretrained weights: {e}")
-        else:
-            # Use simplified implementation
-            config = model_configs[MODEL_TYPE]
-            depth_model = DepthAnythingV2(**config)
+                    logger.warning(f"Could not load pretrained weights: {e}"))
         
         # Move to device and set eval mode
         depth_model = depth_model.to(device).eval()
