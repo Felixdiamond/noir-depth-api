@@ -4,9 +4,14 @@ Provides monocular depth estimation using official DepthAnything V2 PyTorch impl
 Optimized for NVIDIA L4 GPUs on Google Cloud Run
 """
 
+
 # Set environment for headless operation before any imports
 import os
 os.environ['OPENCV_IO_ENABLE_OPENEXR'] = '1'
+
+# Ensure Depth Anything V2 repo is importable
+import sys
+sys.path.append('/app/Depth-Anything-V2')
 
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.responses import JSONResponse
@@ -58,79 +63,17 @@ model_configs = {
     'vitg': {'encoder': 'vitg', 'features': 384, 'out_channels': [1536, 1536, 1536, 1536]}
 }
 
+
 # We'll use the small model (vits) for efficiency
 MODEL_TYPE = 'vits'  # 24.8M parameters - good balance of speed and accuracy
-MODEL_PATH = '/app/models/depth_anything_v2_vits.pth'
+MODEL_PATH = '/app/checkpoints/depth_anything_v2_vits.pth'
 
-class DepthAnythingV2(torch.nn.Module):
-    """Simplified DepthAnything V2 model implementation"""
-    
-    def __init__(self, encoder='vits', features=64, out_channels=[48, 96, 192, 384]):
-        super(DepthAnythingV2, self).__init__()
-        import torch.nn as nn
-        import torchvision.transforms as transforms
-        
-        # For now, we'll use a simplified implementation
-        # In production, you'd implement the full DPT architecture
-        self.encoder = encoder
-        self.features = features
-        self.out_channels = out_channels
-        
-        # Simplified depth estimation network
-        # This would normally be the full DINOv2 + DPT architecture
-        self.backbone = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14', pretrained=True)
-        
-        # Simple depth head (in real implementation, this would be the DPT decoder)
-        self.depth_head = nn.Sequential(
-            nn.Conv2d(384, 256, 3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(256, 128, 3, padding=1),
-            nn.ReLU(),
-            nn.Conv2d(128, 1, 3, padding=1),
-            nn.Sigmoid()
-        )
-        
-        # Image preprocessing
-        self.transform = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize((518, 518)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-    
-    def infer_image(self, raw_img):
-        """Infer depth from raw image (numpy array)"""
-        with torch.no_grad():
-            # Preprocess image
-            if isinstance(raw_img, np.ndarray):
-                # Convert BGR to RGB
-                img_rgb = cv2.cvtColor(raw_img, cv2.COLOR_BGR2RGB)
-            else:
-                img_rgb = raw_img
-            
-            # Transform and add batch dimension
-            img_tensor = self.transform(img_rgb).unsqueeze(0).to(next(self.parameters()).device)
-            
-            # Extract features using DINOv2 backbone
-            features = self.backbone.forward_features(img_tensor)
-            
-            # Reshape features for depth head
-            batch_size = features['x_norm_patchtokens'].shape[0]
-            h = w = int(np.sqrt(features['x_norm_patchtokens'].shape[1]))
-            features_reshaped = features['x_norm_patchtokens'].transpose(1, 2).reshape(batch_size, -1, h, w)
-            
-            # Generate depth map
-            depth = self.depth_head(features_reshaped)
-            
-            # Upsample to original resolution
-            depth = F.interpolate(depth, size=(raw_img.shape[0], raw_img.shape[1]), mode='bilinear', align_corners=False)
-            
-            return depth.squeeze().cpu().numpy()
+
+
 
 def load_depthanything_model():
-    """Load DepthAnything V2 model"""
+    """Load DepthAnything V2 model (official only, fail fast if missing)"""
     global depth_model, device
-    
     try:
         # Determine device
         if torch.cuda.is_available():
@@ -139,43 +82,30 @@ def load_depthanything_model():
         else:
             device = torch.device('cpu')
             logger.warning("⚠️ CUDA not available, using CPU")
-        
+
         # Import official DepthAnything V2 implementation
         try:
             from depth_anything_v2.dpt import DepthAnythingV2 as OfficialDepthAnythingV2
-            logger.info("📦 Using official DepthAnything V2 implementation")
-            use_official = True
-        except ImportError:
-            logger.warning("⚠️ Official DepthAnything V2 not found, using simplified implementation")
-            # raise error and stop run
-            raise ImportError("Official DepthAnything V2 not found")
-        
-        if use_official:
-            # Use official implementation
-            config = model_configs[MODEL_TYPE]
-            depth_model = OfficialDepthAnythingV2(**config)
-            
-            # Load pretrained weights if available
-            if os.path.exists(MODEL_PATH):
-                logger.info(f"📦 Loading pretrained weights from {MODEL_PATH}")
-                checkpoint = torch.load(MODEL_PATH, map_location='cpu')
-                depth_model.load_state_dict(checkpoint)
-            else:
-                logger.warning(f"⚠️ Pretrained weights not found at {MODEL_PATH}")
-                # Try to download from Hugging Face or use torch.hub
-                try:
-                    logger.info("🔄 Attempting to load pretrained model from torch.hub")
-                    # This would be the ideal way, but requires the model to be available
-                    # For now, we'll use the initialized model
-                except Exception as e:
-                    logger.warning(f"Could not load pretrained weights: {e}"))
-        
+        except ImportError as e:
+            logger.error("❌ Official DepthAnything V2 not found in /app/Depth-Anything-V2. Check Dockerfile and PYTHONPATH.")
+            raise
+
+        config = model_configs[MODEL_TYPE]
+        depth_model = OfficialDepthAnythingV2(**config)
+
+        # Load pretrained weights
+        if os.path.exists(MODEL_PATH):
+            logger.info(f"📦 Loading pretrained weights from {MODEL_PATH}")
+            checkpoint = torch.load(MODEL_PATH, map_location='cpu')
+            depth_model.load_state_dict(checkpoint)
+        else:
+            logger.error(f"❌ Pretrained weights not found at {MODEL_PATH}. Check Dockerfile download step.")
+            raise FileNotFoundError(f"Model weights not found at {MODEL_PATH}")
+
         # Move to device and set eval mode
         depth_model = depth_model.to(device).eval()
-        
         logger.info(f"✅ DepthAnything V2 {MODEL_TYPE.upper()} model loaded successfully")
         return True
-        
     except Exception as e:
         logger.error(f"❌ Failed to load DepthAnything V2 model: {e}")
         return False

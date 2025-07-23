@@ -46,20 +46,30 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+
+# Clone Depth Anything V2 repo (official, not pip-installable)
+RUN git clone https://github.com/DepthAnything/Depth-Anything-V2.git /app/Depth-Anything-V2
+
+# Install Depth Anything V2 requirements
+RUN pip install --no-cache-dir -r /app/Depth-Anything-V2/requirements.txt
+
+# Copy your service requirements and install (remove any git+ line for DepthAnything)
 COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Download model weights (vits example)
+RUN mkdir -p /app/checkpoints && \
+    curl -L -o /app/checkpoints/depth_anything_v2_vits.pth \
+    https://huggingface.co/depth-anything/Depth-Anything-V2-Small/resolve/main/depth_anything_v2_vits.pth?download=true
 
 # Copy application code
 COPY main.py .
 COPY test_opencv.py .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Test OpenCV installation
 RUN python test_opencv.py
 
-# Create models directory
+# Create models directory (if you want to use /app/models for other models)
 RUN mkdir -p /app/models
 
 # Create non-root user for security
