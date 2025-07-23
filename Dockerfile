@@ -53,7 +53,7 @@ RUN git clone https://github.com/DepthAnything/Depth-Anything-V2.git /app/Depth-
 # Install Depth Anything V2 requirements
 RUN pip install --no-cache-dir -r /app/Depth-Anything-V2/requirements.txt
 
-# Copy your service requirements and install (remove any git+ line for DepthAnything)
+# Copy your service requirements and install 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
