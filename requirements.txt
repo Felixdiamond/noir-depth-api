@@ -9,4 +9,4 @@ pydantic==2.5.0
 python-multipart==0.0.6
 
 # Depth Anything V2
-git+https://github.com/LiheYoung/Depth-Anything-V2.git
+git+https://github.com/DepthAnything/Depth-Anything-V2.git
