@@ -43,6 +43,7 @@ RUN apt-get update && apt-get install -y \
     libgdk-pixbuf2.0-dev \
     libpango1.0-dev \
     libgtk2.0-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
